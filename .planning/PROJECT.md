@@ -12,7 +12,7 @@ Generate accurate, live-updating TOTP codes with scannable QR codes — all clie
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] App supports dark and light themes with system-aware default and manual toggle — *Validated in Phase 01: Foundation*
 
 ### Active
 
@@ -27,7 +27,7 @@ Generate accurate, live-updating TOTP codes with scannable QR codes — all clie
 - [ ] QR code is scannable by authenticator apps (Google Authenticator, Authy, Microsoft Authenticator)
 - [ ] All computation happens client-side — no backend, no data transmitted
 - [ ] No data persistence — everything is ephemeral, nothing stored in localStorage or cookies
-- [ ] App supports dark and light themes with system-aware default and manual toggle
+- [x] ~~App supports dark and light themes with system-aware default and manual toggle~~ → Validated
 - [ ] App is fully responsive and works well on mobile devices
 - [ ] Single-page layout with all inputs, QR code, and live TOTP code visible together
 
@@ -59,8 +59,8 @@ Generate accurate, live-updating TOTP codes with scannable QR codes — all clie
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Next.js + TypeScript | User requirement, good Vercel integration | — Pending |
-| shadcn/ui + Tailwind | Polished component library with consistent design system | — Pending |
+| Next.js + TypeScript | User requirement, good Vercel integration | ✓ Phase 01 |
+| shadcn/ui + Tailwind | Polished component library with consistent design system | ✓ Phase 01 |
 | Client-side only | Privacy-first, no sensitive data leaves browser | — Pending |
 | Single-page layout | All context visible at once, simpler UX for a tool | — Pending |
 | Standard TOTP defaults (SHA1/6/30s) | Matches Google Authenticator defaults, most common config | — Pending |
@@ -84,4 +84,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-10 after initialization*
+*Last updated: 2026-04-10 after Phase 01 completion*
