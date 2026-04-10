@@ -1,9 +1,10 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter, Geist_Mono } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({ subsets: ["latin"] })
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
 
 export const metadata: Metadata = {
   title: "TOTP Studio",
@@ -17,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${inter.className} ${geistMono.variable}`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
