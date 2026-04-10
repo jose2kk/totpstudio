@@ -11,7 +11,7 @@
 - [ ] **TOTP-05**: User can configure the hash algorithm (SHA1, SHA256, SHA512)
 - [ ] **TOTP-06**: User can configure the number of digits (6 or 8)
 - [ ] **TOTP-07**: User can configure the time period (30s or 60s)
-- [ ] **TOTP-08**: Standard defaults are pre-filled: SHA1, 6 digits, 30-second period
+- [x] **TOTP-08**: Standard defaults are pre-filled: SHA1, 6 digits, 30-second period
 - [ ] **TOTP-09**: App displays a live TOTP code that rotates automatically based on the configured period
 - [ ] **TOTP-10**: App displays an animated countdown progress bar with color coding (green → yellow → red)
 - [ ] **TOTP-11**: User can copy the current TOTP code to clipboard
@@ -30,8 +30,8 @@
 - [ ] **UI-01**: Single-page layout with all inputs, QR code, and live TOTP code visible together
 - [x] **UI-02**: Dark and light themes with system-aware default and manual toggle
 - [ ] **UI-03**: Fully responsive layout that works on mobile devices
-- [ ] **UI-04**: All computation happens client-side — no backend, no data transmitted
-- [ ] **UI-05**: No data persistence — everything is ephemeral (no localStorage, no cookies)
+- [x] **UI-04**: All computation happens client-side — no backend, no data transmitted
+- [x] **UI-05**: No data persistence — everything is ephemeral (no localStorage, no cookies)
 
 ### Infrastructure
 
@@ -65,7 +65,7 @@
 | TOTP-05 | Phase 2 | Pending |
 | TOTP-06 | Phase 2 | Pending |
 | TOTP-07 | Phase 2 | Pending |
-| TOTP-08 | Phase 2 | Pending |
+| TOTP-08 | Phase 2 | Complete |
 | TOTP-09 | Phase 2 | Pending |
 | TOTP-10 | Phase 2 | Pending |
 | TOTP-11 | Phase 2 | Pending |
@@ -78,8 +78,8 @@
 | UI-01 | Phase 3 | Pending |
 | UI-02 | Phase 1 | Complete |
 | UI-03 | Phase 3 | Pending |
-| UI-04 | Phase 2 | Pending |
-| UI-05 | Phase 2 | Pending |
+| UI-04 | Phase 2 | Complete |
+| UI-05 | Phase 2 | Complete |
 | INFRA-01 | Phase 1 | Complete |
 | INFRA-02 | Phase 1 | Complete |
 | INFRA-03 | Phase 1 | Complete |
