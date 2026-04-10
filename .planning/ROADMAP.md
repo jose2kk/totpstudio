@@ -42,7 +42,10 @@ Plans:
   3. The TOTP code rotates automatically at the configured period and matches a reference authenticator app
   4. The countdown progress bar animates green → yellow → red and resets on each code rotation
   5. No network requests are made and page reload produces no pre-filled data
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 02-01-PLAN.md — Install dependencies, scaffold shadcn components, add Geist Mono font, create TOTP utility module
+- [ ] 02-02-PLAN.md — Build TOTPGenerator component and wire into page
 **UI hint**: yes
 
 ### Phase 3: QR Code + Complete UI
@@ -66,5 +69,5 @@ Phases execute in numeric order: 1 → 2 → 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation | 1/1 | Complete   | 2026-04-10 |
-| 2. TOTP Engine | 0/? | Not started | - |
+| 2. TOTP Engine | 0/2 | Not started | - |
 | 3. QR Code + Complete UI | 0/? | Not started | - |
