@@ -28,16 +28,16 @@
 ### UI/UX
 
 - [ ] **UI-01**: Single-page layout with all inputs, QR code, and live TOTP code visible together
-- [ ] **UI-02**: Dark and light themes with system-aware default and manual toggle
+- [x] **UI-02**: Dark and light themes with system-aware default and manual toggle
 - [ ] **UI-03**: Fully responsive layout that works on mobile devices
 - [ ] **UI-04**: All computation happens client-side — no backend, no data transmitted
 - [ ] **UI-05**: No data persistence — everything is ephemeral (no localStorage, no cookies)
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: Next.js with TypeScript and static export (`output: 'export'`)
-- [ ] **INFRA-02**: shadcn/ui + Tailwind CSS v4 for UI components
-- [ ] **INFRA-03**: Deployable to Vercel with zero server-side routes
+- [x] **INFRA-01**: Next.js with TypeScript and static export (`output: 'export'`)
+- [x] **INFRA-02**: shadcn/ui + Tailwind CSS v4 for UI components
+- [x] **INFRA-03**: Deployable to Vercel with zero server-side routes
 
 ## v2 Requirements (Deferred)
 
@@ -76,13 +76,13 @@
 | QR-05 | Phase 3 | Pending |
 | QR-06 | Phase 3 | Pending |
 | UI-01 | Phase 3 | Pending |
-| UI-02 | Phase 1 | Pending |
+| UI-02 | Phase 1 | Complete |
 | UI-03 | Phase 3 | Pending |
 | UI-04 | Phase 2 | Pending |
 | UI-05 | Phase 2 | Pending |
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
+| INFRA-01 | Phase 1 | Complete |
+| INFRA-02 | Phase 1 | Complete |
+| INFRA-03 | Phase 1 | Complete |
 
 ---
 *Created: 2026-04-10*

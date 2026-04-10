@@ -12,7 +12,7 @@ Three phases from zero to shippable: First, scaffold the Next.js static-export p
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation** - Next.js static-export project with Tailwind v4 and dark/light theme wired correctly
+- [x] **Phase 1: Foundation** - Next.js static-export project with Tailwind v4 and dark/light theme wired correctly (completed 2026-04-10)
 - [ ] **Phase 2: TOTP Engine** - Live TOTP code computation with countdown timer and all secret/parameter controls
 - [ ] **Phase 3: QR Code + Complete UI** - QR generation, otpauth URI display, and final responsive single-page layout
 
@@ -29,7 +29,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. shadcn/ui components render correctly in both themes
 **Plans**: 1 plan
 Plans:
-- [ ] 01-01-PLAN.md — Scaffold project, wire theme system, build skeleton landing page
+- [x] 01-01-PLAN.md — Scaffold project, wire theme system, build skeleton landing page
 **UI hint**: yes
 
 ### Phase 2: TOTP Engine
@@ -65,6 +65,6 @@ Phases execute in numeric order: 1 → 2 → 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation | 0/1 | Not started | - |
+| 1. Foundation | 1/1 | Complete   | 2026-04-10 |
 | 2. TOTP Engine | 0/? | Not started | - |
 | 3. QR Code + Complete UI | 0/? | Not started | - |
