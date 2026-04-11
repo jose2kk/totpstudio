@@ -6,6 +6,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Header } from "@/components/header"
+import { TOTPGenerator } from "@/components/totp-generator"
 
 export default function Home() {
   return (
@@ -21,9 +22,7 @@ export default function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground text-sm">
-                Content coming in Phase 2.
-              </p>
+              <TOTPGenerator />
             </CardContent>
           </Card>
         </div>

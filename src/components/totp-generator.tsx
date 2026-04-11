@@ -25,9 +25,9 @@ export function TOTPGenerator() {
 
   // TOTP output state
   const [code, setCode] = useState('')
-  const [secondsRemaining, setSecondsRemaining] = useState(period)
-  const [progress, setProgress] = useState(100)
-  const [timeStep, setTimeStep] = useState(0)
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(30)
+  const [progress, setProgress] = useState<number>(100)
+  const [timeStep, setTimeStep] = useState<number>(0)
   const [barColor, setBarColor] = useState('bg-green-500')
 
   // Wall-clock TOTP generation timer (per D-09, RESEARCH Pattern 2)
