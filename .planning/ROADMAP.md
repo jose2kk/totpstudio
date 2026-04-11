@@ -45,7 +45,7 @@ Plans:
 **Plans**: 2 plans
 Plans:
 - [x] 02-01-PLAN.md — Install dependencies, scaffold shadcn components, add Geist Mono font, create TOTP utility module
-- [ ] 02-02-PLAN.md — Build TOTPGenerator component and wire into page
+- [x] 02-02-PLAN.md — Build TOTPGenerator component and wire into page
 **UI hint**: yes
 
 ### Phase 3: QR Code + Complete UI

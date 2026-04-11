@@ -4,17 +4,17 @@
 
 ### TOTP Core
 
-- [ ] **TOTP-01**: User can input a TOTP secret (base32-encoded) in a text field
-- [ ] **TOTP-02**: User can click a button to randomly generate a base32 secret
-- [ ] **TOTP-03**: User can toggle show/hide on the secret field
-- [ ] **TOTP-04**: User can copy the secret to clipboard
-- [ ] **TOTP-05**: User can configure the hash algorithm (SHA1, SHA256, SHA512)
-- [ ] **TOTP-06**: User can configure the number of digits (6 or 8)
-- [ ] **TOTP-07**: User can configure the time period (30s or 60s)
+- [x] **TOTP-01**: User can input a TOTP secret (base32-encoded) in a text field
+- [x] **TOTP-02**: User can click a button to randomly generate a base32 secret
+- [x] **TOTP-03**: User can toggle show/hide on the secret field
+- [x] **TOTP-04**: User can copy the secret to clipboard
+- [x] **TOTP-05**: User can configure the hash algorithm (SHA1, SHA256, SHA512)
+- [x] **TOTP-06**: User can configure the number of digits (6 or 8)
+- [x] **TOTP-07**: User can configure the time period (30s or 60s)
 - [x] **TOTP-08**: Standard defaults are pre-filled: SHA1, 6 digits, 30-second period
-- [ ] **TOTP-09**: App displays a live TOTP code that rotates automatically based on the configured period
-- [ ] **TOTP-10**: App displays an animated countdown progress bar with color coding (green → yellow → red)
-- [ ] **TOTP-11**: User can copy the current TOTP code to clipboard
+- [x] **TOTP-09**: App displays a live TOTP code that rotates automatically based on the configured period
+- [x] **TOTP-10**: App displays an animated countdown progress bar with color coding (green → yellow → red)
+- [x] **TOTP-11**: User can copy the current TOTP code to clipboard
 
 ### QR Code
 
@@ -58,17 +58,17 @@
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| TOTP-01 | Phase 2 | Pending |
-| TOTP-02 | Phase 2 | Pending |
-| TOTP-03 | Phase 2 | Pending |
-| TOTP-04 | Phase 2 | Pending |
-| TOTP-05 | Phase 2 | Pending |
-| TOTP-06 | Phase 2 | Pending |
-| TOTP-07 | Phase 2 | Pending |
+| TOTP-01 | Phase 2 | Complete |
+| TOTP-02 | Phase 2 | Complete |
+| TOTP-03 | Phase 2 | Complete |
+| TOTP-04 | Phase 2 | Complete |
+| TOTP-05 | Phase 2 | Complete |
+| TOTP-06 | Phase 2 | Complete |
+| TOTP-07 | Phase 2 | Complete |
 | TOTP-08 | Phase 2 | Complete |
-| TOTP-09 | Phase 2 | Pending |
-| TOTP-10 | Phase 2 | Pending |
-| TOTP-11 | Phase 2 | Pending |
+| TOTP-09 | Phase 2 | Complete |
+| TOTP-10 | Phase 2 | Complete |
+| TOTP-11 | Phase 2 | Complete |
 | QR-01 | Phase 3 | Pending |
 | QR-02 | Phase 3 | Pending |
 | QR-03 | Phase 3 | Pending |
