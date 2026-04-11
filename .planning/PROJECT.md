@@ -13,21 +13,20 @@ Generate accurate, live-updating TOTP codes with scannable QR codes — all clie
 ### Validated
 
 - [x] App supports dark and light themes with system-aware default and manual toggle — *Validated in Phase 01: Foundation*
+- [x] User can input a TOTP secret (base32-encoded) in a text field — *Validated in Phase 02: TOTP Engine*
+- [x] User can click a button to randomly generate a base32 secret for testing — *Validated in Phase 02: TOTP Engine*
+- [x] User can configure TOTP parameters: algorithm (SHA1/SHA256/SHA512), digits (6/8), period (30s/60s) — *Validated in Phase 02: TOTP Engine*
+- [x] Standard defaults are pre-filled: SHA1, 6 digits, 30-second period — *Validated in Phase 02: TOTP Engine*
+- [x] App displays a live TOTP code that rotates automatically based on the configured period — *Validated in Phase 02: TOTP Engine*
+- [x] App displays a countdown timer showing time remaining until next code rotation — *Validated in Phase 02: TOTP Engine*
+- [x] All computation happens client-side — no backend, no data transmitted — *Validated in Phase 02: TOTP Engine*
+- [x] No data persistence — everything is ephemeral, nothing stored in localStorage or cookies — *Validated in Phase 02: TOTP Engine*
 
 ### Active
 
-- [ ] User can input a TOTP secret (base32-encoded) in a text field
-- [ ] User can click a button to randomly generate a base32 secret for testing
-- [ ] User can configure TOTP parameters: algorithm (SHA1/SHA256/SHA512), digits (6/8), period (30s/60s)
-- [ ] Standard defaults are pre-filled: SHA1, 6 digits, 30-second period
 - [ ] User can input issuer name and account label for the QR code
-- [ ] App displays a live TOTP code that rotates automatically based on the configured period
-- [ ] App displays a countdown timer showing time remaining until next code rotation
 - [ ] App generates a QR code encoding the `otpauth://totp/` URI with all configured parameters
 - [ ] QR code is scannable by authenticator apps (Google Authenticator, Authy, Microsoft Authenticator)
-- [ ] All computation happens client-side — no backend, no data transmitted
-- [ ] No data persistence — everything is ephemeral, nothing stored in localStorage or cookies
-- [x] ~~App supports dark and light themes with system-aware default and manual toggle~~ → Validated
 - [ ] App is fully responsive and works well on mobile devices
 - [ ] Single-page layout with all inputs, QR code, and live TOTP code visible together
 
@@ -61,9 +60,9 @@ Generate accurate, live-updating TOTP codes with scannable QR codes — all clie
 |----------|-----------|---------|
 | Next.js + TypeScript | User requirement, good Vercel integration | ✓ Phase 01 |
 | shadcn/ui + Tailwind | Polished component library with consistent design system | ✓ Phase 01 |
-| Client-side only | Privacy-first, no sensitive data leaves browser | — Pending |
+| Client-side only | Privacy-first, no sensitive data leaves browser | ✓ Phase 02 |
 | Single-page layout | All context visible at once, simpler UX for a tool | — Pending |
-| Standard TOTP defaults (SHA1/6/30s) | Matches Google Authenticator defaults, most common config | — Pending |
+| Standard TOTP defaults (SHA1/6/30s) | Matches Google Authenticator defaults, most common config | ✓ Phase 02 |
 | No QR download | Keep scope minimal | — Pending |
 
 ## Evolution
@@ -84,4 +83,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-10 after Phase 01 completion*
+*Last updated: 2026-04-10 after Phase 02 completion*
