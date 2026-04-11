@@ -6,6 +6,9 @@
  * reject tampered/invalid input before passing to the TOTP engine.
  */
 
+import { generateURI } from 'otplib'
+import type { HashAlgorithm } from 'otplib'
+
 const BASE32_REGEX = /^[A-Z2-7]+=*$/i
 
 /**
@@ -73,4 +76,35 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+export interface OtpauthUriParams {
+  secret: string
+  issuer: string
+  account: string
+  algorithm: HashAlgorithm
+  digits: number
+  period: number
+}
+
+/**
+ * Build an otpauth:// URI for QR code generation.
+ * Returns null when the secret is empty or blank.
+ *
+ * Base32 padding ("=") is stripped before passing to generateURI because
+ * generateURI URL-encodes "=" as "%3D", which breaks authenticator app scanning.
+ * (Per STATE.md decision and RESEARCH Pitfall 2)
+ */
+export function buildOtpauthUri(params: OtpauthUriParams): string | null {
+  if (!params.secret) return null
+  const stripped = params.secret.trim().replace(/=/g, '')
+  if (!stripped) return null
+  return generateURI({
+    issuer: params.issuer,
+    label: params.account || 'Account',
+    secret: stripped,
+    algorithm: params.algorithm,
+    digits: params.digits,
+    period: params.period,
+  })
 }

@@ -4,7 +4,7 @@
  */
 
 import assert from "node:assert/strict"
-import { validateBase32, formatCode, getCountdownState, copyToClipboard } from "../totp"
+import { validateBase32, formatCode, getCountdownState, copyToClipboard, buildOtpauthUri } from "../totp"
 
 let passed = 0
 let failed = 0
@@ -178,6 +178,59 @@ test("returns false on clipboard failure", async () => {
   const result = await copyToClipboard("test-secret")
   Object.defineProperty(globalThis, "navigator", { value: origNavigator, writable: true, configurable: true })
   assert.strictEqual(result, false)
+})
+
+// --- buildOtpauthUri ---
+console.log("\nbuildOtpauthUri:")
+
+test("valid secret + issuer + account returns URI starting with otpauth://totp/", () => {
+  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Acme', account: 'alice@example.com', algorithm: 'sha1', digits: 6, period: 30 })
+  assert.ok(uri !== null, "expected non-null URI")
+  assert.ok(uri!.startsWith("otpauth://totp/"), `URI should start with otpauth://totp/ but got: ${uri}`)
+})
+
+test("padded secret produces URI without = or %3D in secret param", () => {
+  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP====', issuer: 'Test', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
+  assert.ok(uri !== null, "expected non-null URI")
+  const secretParam = new URL(uri!).searchParams.get('secret') ?? ''
+  assert.ok(!secretParam.includes('='), `secret param should not contain = but got: ${secretParam}`)
+  assert.ok(!uri!.includes('%3D'), `URI should not contain %3D but got: ${uri}`)
+})
+
+test("empty string secret returns null", () => {
+  const uri = buildOtpauthUri({ secret: '', issuer: 'Test', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
+  assert.strictEqual(uri, null)
+})
+
+test("sha256 algorithm produces URI containing &algorithm=SHA256", () => {
+  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Test', account: 'user', algorithm: 'sha256', digits: 6, period: 30 })
+  assert.ok(uri !== null, "expected non-null URI")
+  assert.ok(uri!.includes('algorithm=SHA256'), `URI should contain algorithm=SHA256 but got: ${uri}`)
+})
+
+test("sha1 algorithm produces URI where 'algorithm' does NOT appear (default omitted)", () => {
+  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Test', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
+  assert.ok(uri !== null, "expected non-null URI")
+  assert.ok(!uri!.includes('algorithm'), `URI should NOT contain 'algorithm' for sha1 but got: ${uri}`)
+})
+
+test("empty issuer produces URI without &issuer= param", () => {
+  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: '', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
+  assert.ok(uri !== null, "expected non-null URI")
+  assert.ok(!uri!.includes('issuer='), `URI should NOT contain issuer= when issuer is empty but got: ${uri}`)
+})
+
+test("8 digits and 60s period produces URI containing &digits=8 and &period=60", () => {
+  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Test', account: 'user', algorithm: 'sha1', digits: 8, period: 60 })
+  assert.ok(uri !== null, "expected non-null URI")
+  assert.ok(uri!.includes('digits=8'), `URI should contain digits=8 but got: ${uri}`)
+  assert.ok(uri!.includes('period=60'), `URI should contain period=60 but got: ${uri}`)
+})
+
+test("issuer 'Acme Corp' produces URI containing URL-encoded issuer param", () => {
+  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Acme Corp', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
+  assert.ok(uri !== null, "expected non-null URI")
+  assert.ok(uri!.includes('issuer=Acme'), `URI should contain issuer=Acme but got: ${uri}`)
 })
 
 // --- Summary ---

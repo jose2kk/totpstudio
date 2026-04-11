@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to plan
-stopped_at: Completed 02-totp-engine/02-02-PLAN.md — awaiting human verify checkpoint (Task 3)
-last_updated: "2026-04-11T00:14:51.288Z"
+status: v1.0 milestone complete
+stopped_at: Completed 03-qr-code-complete-ui-03-01-PLAN.md
+last_updated: "2026-04-11T04:26:56.892Z"
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 3
-  completed_plans: 3
+  completed_phases: 3
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-10)
 
 **Core value:** Generate accurate, live-updating TOTP codes with scannable QR codes — all client-side, no data leaves the browser
-**Current focus:** Phase 02 — totp-engine
+**Current focus:** v1.0 milestone complete — planning next milestone
 
 ## Current Position
 
-Phase: 3
-Plan: Not started
+Milestone: v1.0 MVP — shipped 2026-04-11
+Next: Planning next milestone
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Plan: Not started
 | Phase 01-foundation P01 | 30 | 3 tasks | 13 files |
 | Phase 02-totp-engine P01 | 20 | 2 tasks | 7 files |
 | Phase 02-totp-engine P02 | 15 | 2 tasks | 2 files |
+| Phase 03-qr-code-complete-ui P01 | 12 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -71,6 +72,9 @@ Recent decisions affecting current work:
 - [Phase 02-totp-engine]: tsx installed as devDependency for TypeScript test execution — Node 20.11.1 lacks --experimental-strip-types
 - [Phase 02-totp-engine]: otplib is ESM-only; node require() fails but Next.js/browser ESM import works correctly
 - [Phase 02-totp-engine]: secondsRemaining/progress/timeStep state vars must be typed as number — initializing with period (30|60) causes TypeScript to infer SetStateAction<30|60> breaking countdown setters
+- [Phase 03-qr-code-complete-ui]: Import QRCode as default from react-qr-code (not QRCodeSVG from qrcode.react)
+- [Phase 03-qr-code-complete-ui]: buildOtpauthUri extracted to src/lib/totp.ts as pure utility enabling unit testability
+- [Phase 03-qr-code-complete-ui]: Two-column grid uses md: breakpoint; SHA warning placed contextually inside Algorithm div
 
 ### Pending Todos
 
@@ -82,6 +86,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-11T00:04:08.249Z
-Stopped at: Completed 02-totp-engine/02-02-PLAN.md — awaiting human verify checkpoint (Task 3)
+Last session: 2026-04-11T03:42:52.208Z
+Stopped at: Completed 03-qr-code-complete-ui-03-01-PLAN.md
 Resume file: None

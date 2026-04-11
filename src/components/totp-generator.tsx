@@ -1,14 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { generate, generateSecret } from 'otplib'
 import type { HashAlgorithm } from 'otplib'
-import { Eye, EyeOff, Clipboard, Check, Dices } from 'lucide-react'
+import { Eye, EyeOff, Clipboard, Check, Dices, QrCode } from 'lucide-react'
+import QRCode from 'react-qr-code'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { validateBase32, formatCode, getCountdownState, copyToClipboard } from '@/lib/totp'
+import { validateBase32, formatCode, getCountdownState, copyToClipboard, buildOtpauthUri } from '@/lib/totp'
 
 export function TOTPGenerator() {
   // Form state
@@ -23,12 +24,24 @@ export function TOTPGenerator() {
   const [secretCopied, setSecretCopied] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
 
+  // QR identity fields (QR-01, QR-02, per D-06: optional, empty default)
+  const [issuer, setIssuer] = useState('')
+  const [account, setAccount] = useState('')
+
+  // URI copy feedback
+  const [uriCopied, setUriCopied] = useState(false)
+
   // TOTP output state
   const [code, setCode] = useState('')
   const [secondsRemaining, setSecondsRemaining] = useState<number>(30)
   const [progress, setProgress] = useState<number>(100)
   const [timeStep, setTimeStep] = useState<number>(0)
   const [barColor, setBarColor] = useState('bg-green-500')
+
+  // Compute otpauth:// URI reactively (QR-03, per D-06: renders when valid secret exists)
+  const uri = useMemo(() => {
+    return buildOtpauthUri({ secret, issuer, account, algorithm, digits, period })
+  }, [secret, issuer, account, algorithm, digits, period])
 
   // Wall-clock TOTP generation timer (per D-09, RESEARCH Pattern 2)
   // Uses Date.now() for self-correcting countdown, not setInterval decrement
@@ -74,8 +87,8 @@ export function TOTPGenerator() {
   }, [secret, secretError, algorithm, digits, period])
 
   return (
-    <div className="space-y-6">
-      {/* Secret input with inline icon adornments (D-01, D-02, RESEARCH Pattern 5) */}
+    <div className="space-y-4">
+      {/* FULL-WIDTH: Secret input section (per D-02) */}
       <div className="space-y-1">
         <div className="relative">
           <Input
@@ -146,117 +159,206 @@ export function TOTPGenerator() {
         )}
       </div>
 
-      {/* Parameter segmented controls (D-05, D-06, RESEARCH Pattern 6, Pitfall 1, Pitfall 3) */}
-      <div className="flex flex-wrap gap-4">
-        {/* Algorithm */}
-        <div className="space-y-2">
-          <span className="text-sm font-semibold">Algorithm</span>
-          <ToggleGroup
-            value={[algorithm]}
-            onValueChange={(values) => {
-              // Guard against empty-selection deselection (RESEARCH Pitfall 1)
-              if (values.length > 0) setAlgorithm(values[0] as HashAlgorithm)
-            }}
-            variant="outline"
-          >
-            {/* Internal values are lowercase to match otplib HashAlgorithm (RESEARCH Pitfall 3) */}
-            <ToggleGroupItem value="sha1">SHA-1</ToggleGroupItem>
-            <ToggleGroupItem value="sha256">SHA-256</ToggleGroupItem>
-            <ToggleGroupItem value="sha512">SHA-512</ToggleGroupItem>
-          </ToggleGroup>
+      {/* TWO-COLUMN GRID (per D-01, UI-01, UI-03) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+        {/* LEFT COLUMN: Parameters + TOTP output */}
+        <div className="space-y-4">
+          {/* Parameter segmented controls (D-05, D-06, RESEARCH Pattern 6, Pitfall 1, Pitfall 3) */}
+          <div className="flex flex-wrap gap-4">
+            {/* Algorithm */}
+            <div className="space-y-2">
+              <span className="text-sm font-semibold">Algorithm</span>
+              <ToggleGroup
+                value={[algorithm]}
+                onValueChange={(values) => {
+                  // Guard against empty-selection deselection (RESEARCH Pitfall 1)
+                  if (values.length > 0) setAlgorithm(values[0] as HashAlgorithm)
+                }}
+                variant="outline"
+              >
+                {/* Internal values are lowercase to match otplib HashAlgorithm (RESEARCH Pitfall 3) */}
+                <ToggleGroupItem value="sha1">SHA-1</ToggleGroupItem>
+                <ToggleGroupItem value="sha256">SHA-256</ToggleGroupItem>
+                <ToggleGroupItem value="sha512">SHA-512</ToggleGroupItem>
+              </ToggleGroup>
+
+              {/* SHA warning (QR-06, per D-07) — appears below Algorithm toggle when sha256/sha512 */}
+              {(algorithm === 'sha256' || algorithm === 'sha512') && (
+                <p className="text-amber-500 text-xs" role="alert">
+                  SHA-256 and SHA-512 are not supported by Google Authenticator or Microsoft Authenticator. Use SHA-1 for broad compatibility.
+                </p>
+              )}
+            </div>
+
+            {/* Digits */}
+            <div className="space-y-2">
+              <span className="text-sm font-semibold">Digits</span>
+              <ToggleGroup
+                value={[String(digits)]}
+                onValueChange={(values) => {
+                  if (values.length > 0) setDigits(Number(values[0]) as 6 | 8)
+                }}
+                variant="outline"
+              >
+                <ToggleGroupItem value="6">6</ToggleGroupItem>
+                <ToggleGroupItem value="8">8</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
+            {/* Period */}
+            <div className="space-y-2">
+              <span className="text-sm font-semibold">Period</span>
+              <ToggleGroup
+                value={[String(period)]}
+                onValueChange={(values) => {
+                  if (values.length > 0) setPeriod(Number(values[0]) as 30 | 60)
+                }}
+                variant="outline"
+              >
+                <ToggleGroupItem value="30">30s</ToggleGroupItem>
+                <ToggleGroupItem value="60">60s</ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          </div>
+
+          {/* TOTP code display (D-07, D-08, RESEARCH Pattern 7) */}
+          <div className="flex items-center justify-center gap-3">
+            {/* key={timeStep} triggers remount for fade-in animation on code rotation */}
+            <div
+              key={!secret || secretError ? 'empty' : timeStep}
+              className="animate-in fade-in duration-200"
+              aria-live="polite"
+            >
+              <span
+                className={cn(
+                  'font-mono text-[30px] font-semibold tracking-wider',
+                  (!secret || secretError) && 'text-muted-foreground'
+                )}
+              >
+                {!secret || secretError ? formatCode('', digits) : formatCode(code, digits)}
+              </span>
+            </div>
+
+            {/* Copy TOTP code button */}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={async () => {
+                if (!code) return
+                const ok = await copyToClipboard(code)
+                if (ok) {
+                  setCodeCopied(true)
+                  setTimeout(() => setCodeCopied(false), 1500)
+                }
+              }}
+              disabled={!code}
+              aria-label="Copy TOTP code"
+              type="button"
+            >
+              {codeCopied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
+            </Button>
+          </div>
+
+          {/* Countdown progress bar (D-09, D-10, D-11, RESEARCH Pitfall 4, UI-SPEC Animation Contract) */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+              <div
+                className={cn(
+                  'h-full rounded-full',
+                  secret && !secretError ? barColor : 'bg-muted-foreground/50',
+                  // Remove transition at period boundary to prevent slow 0→100 animation (RESEARCH Pitfall 4)
+                  secondsRemaining === period
+                    ? 'transition-none'
+                    : 'transition-[width] duration-[950ms] ease-linear'
+                )}
+                style={{ width: secret && !secretError ? `${progress}%` : '0%' }}
+                role="progressbar"
+                aria-valuenow={secret && !secretError ? secondsRemaining : 0}
+                aria-valuemin={0}
+                aria-valuemax={period}
+              />
+            </div>
+            <span className="text-sm text-muted-foreground w-8 text-right tabular-nums">
+              {secret && !secretError ? `${secondsRemaining}s` : ''}
+            </span>
+          </div>
         </div>
 
-        {/* Digits */}
-        <div className="space-y-2">
-          <span className="text-sm font-semibold">Digits</span>
-          <ToggleGroup
-            value={[String(digits)]}
-            onValueChange={(values) => {
-              if (values.length > 0) setDigits(Number(values[0]) as 6 | 8)
-            }}
-            variant="outline"
-          >
-            <ToggleGroupItem value="6">6</ToggleGroupItem>
-            <ToggleGroupItem value="8">8</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
+        {/* RIGHT COLUMN: QR identity + QR code + URI (per D-05) */}
+        <div className="space-y-4 md:pl-4 md:border-l md:border-border">
 
-        {/* Period */}
-        <div className="space-y-2">
-          <span className="text-sm font-semibold">Period</span>
-          <ToggleGroup
-            value={[String(period)]}
-            onValueChange={(values) => {
-              if (values.length > 0) setPeriod(Number(values[0]) as 30 | 60)
-            }}
-            variant="outline"
-          >
-            <ToggleGroupItem value="30">30s</ToggleGroupItem>
-            <ToggleGroupItem value="60">60s</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-      </div>
+          {/* Issuer input (QR-01, per D-05, D-06) */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold" htmlFor="issuer-input">Issuer</label>
+            <Input
+              id="issuer-input"
+              value={issuer}
+              onChange={(e) => setIssuer(e.target.value)}
+              placeholder="Acme Corp"
+            />
+          </div>
 
-      {/* TOTP code display (D-07, D-08, RESEARCH Pattern 7) */}
-      <div className="flex items-center justify-center gap-3">
-        {/* key={timeStep} triggers remount for fade-in animation on code rotation */}
-        <div
-          key={!secret || secretError ? 'empty' : timeStep}
-          className="animate-in fade-in duration-200"
-          aria-live="polite"
-        >
-          <span
-            className={cn(
-              'font-mono text-[30px] font-semibold tracking-wider',
-              (!secret || secretError) && 'text-muted-foreground'
+          {/* Account input (QR-02, per D-05, D-06) */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold" htmlFor="account-input">Account</label>
+            <Input
+              id="account-input"
+              value={account}
+              onChange={(e) => setAccount(e.target.value)}
+              placeholder="alice@example.com"
+            />
+          </div>
+
+          {/* QR code display (QR-03, QR-04, per D-06: renders when valid secret exists) */}
+          <div className="flex justify-center">
+            {uri ? (
+              <QRCode
+                value={uri}
+                size={192}
+                level="M"
+                bgColor="transparent"
+                fgColor="currentColor"
+                aria-label="QR code for authenticator app"
+                role="img"
+              />
+            ) : (
+              <div className="size-48 bg-muted rounded-md flex items-center justify-center">
+                <QrCode className="size-8 text-muted-foreground" />
+              </div>
             )}
-          >
-            {!secret || secretError ? formatCode('', digits) : formatCode(code, digits)}
-          </span>
-        </div>
+          </div>
 
-        {/* Copy TOTP code button */}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={async () => {
-            if (!code) return
-            const ok = await copyToClipboard(code)
-            if (ok) {
-              setCodeCopied(true)
-              setTimeout(() => setCodeCopied(false), 1500)
-            }
-          }}
-          disabled={!code}
-          aria-label="Copy TOTP code"
-          type="button"
-        >
-          {codeCopied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
-        </Button>
-      </div>
-
-      {/* Countdown progress bar (D-09, D-10, D-11, RESEARCH Pitfall 4, UI-SPEC Animation Contract) */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
-          <div
-            className={cn(
-              'h-full rounded-full',
-              secret && !secretError ? barColor : 'bg-muted-foreground/50',
-              // Remove transition at period boundary to prevent slow 0→100 animation (RESEARCH Pitfall 4)
-              secondsRemaining === period
-                ? 'transition-none'
-                : 'transition-[width] duration-[950ms] ease-linear'
-            )}
-            style={{ width: secret && !secretError ? `${progress}%` : '0%' }}
-            role="progressbar"
-            aria-valuenow={secret && !secretError ? secondsRemaining : 0}
-            aria-valuemin={0}
-            aria-valuemax={period}
-          />
+          {/* otpauth:// URI display with copy button (QR-05, per D-08) */}
+          {uri && (
+            <div className="space-y-1">
+              <span className="text-sm font-semibold">otpauth:// URI</span>
+              <div className="flex items-center gap-1">
+                <p
+                  className="font-mono text-xs text-muted-foreground truncate flex-1"
+                  title={uri}
+                >
+                  {uri}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={async () => {
+                    const ok = await copyToClipboard(uri)
+                    if (ok) {
+                      setUriCopied(true)
+                      setTimeout(() => setUriCopied(false), 1500)
+                    }
+                  }}
+                  aria-label="Copy URI"
+                  type="button"
+                >
+                  {uriCopied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
-        <span className="text-sm text-muted-foreground w-8 text-right tabular-nums">
-          {secret && !secretError ? `${secondsRemaining}s` : ''}
-        </span>
       </div>
     </div>
   )
