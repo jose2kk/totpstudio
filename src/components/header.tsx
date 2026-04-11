@@ -4,7 +4,7 @@ export function Header() {
   return (
     <header className="border-b">
       <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
-        <span className="font-semibold text-sm">TOTP Studio</span>
+        <h1 className="font-semibold text-sm">TOTP Studio</h1>
         <ThemeToggle />
       </div>
     </header>

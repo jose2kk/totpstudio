@@ -7,8 +7,38 @@ const inter = Inter({ subsets: ["latin"] })
 const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" })
 
 export const metadata: Metadata = {
-  title: "TOTP Studio",
-  description: "Generate TOTP codes and QR codes for authenticator apps",
+  metadataBase: new URL("https://totpstudio.jose2kk.com"),
+  title: "TOTP Studio — Free Online TOTP Code Generator & QR Code Maker",
+  description:
+    "Generate TOTP codes and scannable QR codes for Google Authenticator, Authy, and other authenticator apps. Free, open-source, and 100% client-side — no data leaves your browser.",
+  keywords: [
+    "totp generator",
+    "totp generator online",
+    "totp qr code generator",
+    "authenticator qr code",
+    "otp generator",
+    "2fa code generator",
+    "qr code authenticator",
+    "time based one time password",
+  ],
+  alternates: {
+    canonical: "https://totpstudio.jose2kk.com",
+  },
+  openGraph: {
+    title: "TOTP Studio — Free TOTP Code & QR Code Generator",
+    description:
+      "Generate live TOTP codes and scannable QR codes for any authenticator app. 100% client-side, no data leaves your browser.",
+    url: "https://totpstudio.jose2kk.com",
+    siteName: "TOTP Studio",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "TOTP Studio — Free TOTP Code & QR Code Generator",
+    description:
+      "Generate live TOTP codes and scannable QR codes for any authenticator app. 100% client-side, no data leaves your browser.",
+  },
 }
 
 export default function RootLayout({
