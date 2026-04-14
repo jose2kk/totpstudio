@@ -31,6 +31,12 @@ export function TOTPGenerator() {
   // URI copy feedback
   const [uriCopied, setUriCopied] = useState(false)
 
+  // Seed a random default secret on mount so first-time visitors immediately see a live code + QR.
+  // Done in an effect (not lazy useState init) to avoid SSR/client hydration mismatch.
+  useEffect(() => {
+    setSecret((current) => current || generateSecret())
+  }, [])
+
   // TOTP output state
   const [code, setCode] = useState('')
   const [secondsRemaining, setSecondsRemaining] = useState<number>(30)
