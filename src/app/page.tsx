@@ -5,6 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Footer } from "@/components/footer"
 import { Header } from "@/components/header"
 import { TOTPGenerator } from "@/components/totp-generator"
 
@@ -75,6 +76,7 @@ export default function Home() {
           </section>
         </div>
       </main>
+      <Footer />
     </div>
   )
 }
