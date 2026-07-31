@@ -1,27 +1,83 @@
 /**
  * TOTP utility functions — pure, stateless, client-side only.
  * No persistence, no network calls.
- *
- * Per T-02-01: validateBase32 uses RFC 4648 base32 alphabet regex to
- * reject tampered/invalid input before passing to the TOTP engine.
  */
 
-import { generateURI } from 'otplib'
+import { createGuardrails, generateURI, ScureBase32Plugin } from 'otplib'
 import type { HashAlgorithm } from 'otplib'
 
 const BASE32_REGEX = /^[A-Z2-7]+=*$/i
 
+const base32 = new ScureBase32Plugin()
+
+/** RFC 6238 §5.1 recommends a shared secret of at least 128 bits. */
+export const RECOMMENDED_SECRET_BITS = 128
+
 /**
- * Validate a base32-encoded TOTP secret string.
- * Returns null when valid (or empty — empty is not an error per D-03).
- * Returns an error string when the input is non-empty and invalid.
+ * otplib refuses outright to generate a code for a secret below
+ * RECOMMENDED_SECRET_BITS. Plenty of real services still issue 80-bit
+ * (16-character) secrets, and the point of this tool is to reproduce what
+ * those services actually produce — so the floor is relaxed here and short
+ * secrets earn an advisory warning instead of a rejection.
  */
-export function validateBase32(value: string): string | null {
-  if (!value) return null
+export const GUARDRAILS = createGuardrails({ MIN_SECRET_BYTES: 1 })
+
+/**
+ * Trim whitespace and strip base32 padding.
+ *
+ * Padding has to go for two independent reasons: otplib's base32 decoder
+ * rejects padded input ("string has too much padding"), and generateURI
+ * percent-encodes "=" as "%3D", which breaks authenticator app scanning.
+ */
+export function normalizeSecret(value: string): string {
+  return value.trim().replace(/=+$/, '')
+}
+
+export interface SecretValidation {
+  /** Blocking problem — no code can be generated. */
+  error: string | null
+  /** Non-blocking advisory — a code is still generated. */
+  warning: string | null
+  /** Decoded entropy in bits, or null when the secret is absent or invalid. */
+  bits: number | null
+}
+
+/**
+ * Validate a base32-encoded TOTP secret.
+ *
+ * Empty input is not an error — it is just the initial state. A secret that
+ * decodes to fewer than RECOMMENDED_SECRET_BITS is still valid and usable;
+ * it only earns a warning.
+ */
+export function validateSecret(value: string): SecretValidation {
+  const none: SecretValidation = { error: null, warning: null, bits: null }
+  if (!value) return none
+
   const trimmed = value.trim()
-  if (!trimmed) return "Invalid base32 secret"
-  if (!BASE32_REGEX.test(trimmed)) return "Invalid base32 secret"
-  return null
+  if (!trimmed) return { ...none, error: 'Invalid base32 secret' }
+  if (!BASE32_REGEX.test(trimmed)) {
+    return { ...none, error: 'Invalid base32 secret — use only A–Z and 2–7' }
+  }
+
+  let bits: number
+  try {
+    bits = base32.decode(normalizeSecret(trimmed)).length * 8
+  } catch {
+    return {
+      ...none,
+      error: 'Invalid base32 secret — check for missing or extra characters',
+    }
+  }
+
+  if (bits < RECOMMENDED_SECRET_BITS) {
+    return {
+      error: null,
+      warning: `${bits}-bit secret — RFC 6238 recommends at least ${RECOMMENDED_SECRET_BITS} bits. Codes are still generated.`,
+      bits,
+    }
+  }
+
+  return { error: null, warning: null, bits }
 }
 
 /**
@@ -38,6 +94,11 @@ export function formatCode(code: string, digits: number): string {
   return `${code.slice(0, half)} ${code.slice(half)}`
 }
 
+/** Current wall-clock time in whole seconds. */
+export function nowSeconds(): number {
+  return Math.floor(Date.now() / 1000)
+}
+
 export interface CountdownState {
   secondsRemaining: number
   progress: number
@@ -46,13 +107,15 @@ export interface CountdownState {
 }
 
 /**
- * Calculate the current countdown state for a given TOTP period.
- * Uses wall-clock time (Date.now()) — not setInterval countdown.
+ * Calculate the countdown state for a TOTP period at a given wall-clock time.
+ *
+ * Takes the timestamp as an argument rather than reading Date.now() so it stays
+ * pure — the caller drives it from a single ticking source, and tests can pin
+ * it without monkey-patching the clock.
  *
  * Per D-10: color thresholds at thirds — green >66%, yellow 33-66%, red ≤33%
  */
-export function getCountdownState(period: number): CountdownState {
-  const nowSec = Math.floor(Date.now() / 1000)
+export function getCountdownState(period: number, nowSec: number): CountdownState {
   const secondsElapsed = nowSec % period
   const secondsRemaining = period - secondsElapsed
   const progress = (secondsRemaining / period) * 100
@@ -89,20 +152,19 @@ export interface OtpauthUriParams {
 
 /**
  * Build an otpauth:// URI for QR code generation.
- * Returns null when the secret is empty or blank.
  *
- * Base32 padding ("=") is stripped before passing to generateURI because
- * generateURI URL-encodes "=" as "%3D", which breaks authenticator app scanning.
- * (Per STATE.md decision and RESEARCH Pitfall 2)
+ * Returns null when the secret is empty or invalid — encoding a bad secret
+ * would hand the user a scannable QR that silently creates a broken
+ * authenticator entry.
  */
 export function buildOtpauthUri(params: OtpauthUriParams): string | null {
-  if (!params.secret) return null
-  const stripped = params.secret.trim().replace(/=/g, '')
-  if (!stripped) return null
+  const secret = normalizeSecret(params.secret)
+  if (!secret) return null
+  if (validateSecret(params.secret).error) return null
   return generateURI({
     issuer: params.issuer,
     label: params.account || 'Account',
-    secret: stripped,
+    secret,
     algorithm: params.algorithm,
     digits: params.digits,
     period: params.period,
