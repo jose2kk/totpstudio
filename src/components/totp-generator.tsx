@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { generate, generateSecret } from 'otplib'
 import type { HashAlgorithm } from 'otplib'
 import { Eye, EyeOff, Clipboard, Check, Dices, QrCode } from 'lucide-react'
@@ -20,6 +20,37 @@ import {
   validateSecret,
 } from '@/lib/totp'
 
+/**
+ * Copy-to-clipboard with a transient "copied" acknowledgement.
+ *
+ * Owns its own timer so repeated clicks restart the window instead of letting
+ * an earlier timeout cut the acknowledgement short, and so nothing is left
+ * pending after unmount.
+ */
+const SECRET_MESSAGE_ID = 'secret-message'
+
+function useCopyFeedback(resetMs = 1500) {
+  const [copied, setCopied] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (timer.current) clearTimeout(timer.current)
+  }, [])
+
+  const copy = useCallback(
+    async (text: string) => {
+      if (!text) return
+      if (!(await copyToClipboard(text))) return
+      setCopied(true)
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => setCopied(false), resetMs)
+    },
+    [resetMs]
+  )
+
+  return { copied, copy }
+}
+
 export function TOTPGenerator() {
   // Form state
   const [secret, setSecret] = useState('')
@@ -29,15 +60,24 @@ export function TOTPGenerator() {
 
   // UI state
   const [showSecret, setShowSecret] = useState(false)
-  const [secretCopied, setSecretCopied] = useState(false)
-  const [codeCopied, setCodeCopied] = useState(false)
 
   // QR identity fields (QR-01, QR-02, per D-06: optional, empty default)
   const [issuer, setIssuer] = useState('')
   const [account, setAccount] = useState('')
 
-  // URI copy feedback
-  const [uriCopied, setUriCopied] = useState(false)
+  const secretCopy = useCopyFeedback()
+  const codeCopy = useCopyFeedback()
+  const uriCopy = useCopyFeedback()
+
+  // Copy buttons acknowledge visually with an icon swap, which says nothing to
+  // a screen reader. One shared status region covers all three.
+  const copyAnnouncement = secretCopy.copied
+    ? 'Secret copied to clipboard'
+    : codeCopy.copied
+      ? 'Code copied to clipboard'
+      : uriCopy.copied
+        ? 'URI copied to clipboard'
+        : ''
 
   // Wall clock, in whole seconds. Every countdown value is derived from this
   // single ticking source rather than being tracked as separate state.
@@ -123,6 +163,10 @@ export function TOTPGenerator() {
 
   return (
     <div className="space-y-4">
+      <span role="status" aria-live="polite" className="sr-only">
+        {copyAnnouncement}
+      </span>
+
       {/* FULL-WIDTH: Secret input section (per D-02) */}
       <div className="space-y-1">
         <div className="relative">
@@ -135,7 +179,19 @@ export function TOTPGenerator() {
               'font-mono pr-24',
               secretError && 'border-destructive focus-visible:ring-destructive/20'
             )}
+            aria-label="Base32 secret"
             aria-invalid={!!secretError}
+            aria-describedby={secretError || secretWarning ? SECRET_MESSAGE_ID : undefined}
+            // This is a scratch field on a tool that stores nothing. Password
+            // managers offering to save or autofill it would be both useless
+            // and, on a page about secrets, alarming.
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
           />
           <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
             {/* Eye toggle — show/hide secret */}
@@ -153,18 +209,12 @@ export function TOTPGenerator() {
             <Button
               variant="ghost"
               size="icon-sm"
-              onClick={async () => {
-                const ok = await copyToClipboard(secret)
-                if (ok) {
-                  setSecretCopied(true)
-                  setTimeout(() => setSecretCopied(false), 1500)
-                }
-              }}
+              onClick={() => secretCopy.copy(secret)}
               disabled={!secret}
-              aria-label="Copy secret"
+              aria-label={secretCopy.copied ? 'Secret copied' : 'Copy secret'}
               type="button"
             >
-              {secretCopied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
+              {secretCopy.copied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
             </Button>
 
             {/* Dice — generate random base32 secret (TOTP-02) */}
@@ -182,12 +232,16 @@ export function TOTPGenerator() {
 
         {/* Inline error text (D-03, RESEARCH Pitfall 5) */}
         {secretError && (
-          <p className="text-destructive text-sm">{secretError}</p>
+          <p id={SECRET_MESSAGE_ID} role="alert" className="text-destructive text-sm">
+            {secretError}
+          </p>
         )}
 
         {/* Non-blocking advisory — the code is still generated below */}
         {secretWarning && (
-          <p className="text-amber-500 text-sm">{secretWarning}</p>
+          <p id={SECRET_MESSAGE_ID} className="text-amber-500 text-sm">
+            {secretWarning}
+          </p>
         )}
       </div>
 
@@ -200,8 +254,9 @@ export function TOTPGenerator() {
           <div className="flex flex-wrap gap-4">
             {/* Algorithm */}
             <div className="space-y-2">
-              <span className="text-sm font-semibold">Algorithm</span>
+              <span className="text-sm font-semibold" id="algorithm-label">Algorithm</span>
               <ToggleGroup
+                aria-labelledby="algorithm-label"
                 value={[algorithm]}
                 onValueChange={(values) => {
                   // Guard against empty-selection deselection (RESEARCH Pitfall 1)
@@ -225,8 +280,9 @@ export function TOTPGenerator() {
 
             {/* Digits */}
             <div className="space-y-2">
-              <span className="text-sm font-semibold">Digits</span>
+              <span className="text-sm font-semibold" id="digits-label">Digits</span>
               <ToggleGroup
+                aria-labelledby="digits-label"
                 value={[String(digits)]}
                 onValueChange={(values) => {
                   if (values.length > 0) setDigits(Number(values[0]) as 6 | 8)
@@ -240,8 +296,9 @@ export function TOTPGenerator() {
 
             {/* Period */}
             <div className="space-y-2">
-              <span className="text-sm font-semibold">Period</span>
+              <span className="text-sm font-semibold" id="period-label">Period</span>
               <ToggleGroup
+                aria-labelledby="period-label"
                 value={[String(period)]}
                 onValueChange={(values) => {
                   if (values.length > 0) setPeriod(Number(values[0]) as 30 | 60)
@@ -256,39 +313,36 @@ export function TOTPGenerator() {
 
           {/* TOTP code display (D-07, D-08, RESEARCH Pattern 7) */}
           <div className="flex items-center justify-center gap-3">
-            {/* key={timeStep} triggers remount for fade-in animation on code rotation */}
-            <div
-              key={isLive ? timeStep : 'empty'}
-              className="animate-in fade-in duration-200"
-              aria-live="polite"
-            >
-              <span
-                className={cn(
-                  'font-mono text-[30px] font-semibold tracking-wider',
-                  !isLive && 'text-muted-foreground'
-                )}
+            {/* The live region has to be the stable element: a region inserted
+                at the same moment its content changes is generally not
+                announced, so it cannot be the node that key= remounts. */}
+            <div aria-live="polite" aria-atomic="true">
+              {/* key={timeStep} triggers remount for fade-in animation on code rotation */}
+              <div
+                key={isLive ? timeStep : 'empty'}
+                className="animate-in fade-in duration-200"
               >
-                {formatCode(displayCode, digits)}
-              </span>
+                <span
+                  className={cn(
+                    'font-mono text-[30px] font-semibold tracking-wider',
+                    !isLive && 'text-muted-foreground'
+                  )}
+                >
+                  {formatCode(displayCode, digits)}
+                </span>
+              </div>
             </div>
 
             {/* Copy TOTP code button */}
             <Button
               variant="ghost"
               size="icon-sm"
-              onClick={async () => {
-                if (!displayCode) return
-                const ok = await copyToClipboard(displayCode)
-                if (ok) {
-                  setCodeCopied(true)
-                  setTimeout(() => setCodeCopied(false), 1500)
-                }
-              }}
+              onClick={() => codeCopy.copy(displayCode)}
               disabled={!displayCode}
-              aria-label="Copy TOTP code"
+              aria-label={codeCopy.copied ? 'TOTP code copied' : 'Copy TOTP code'}
               type="button"
             >
-              {codeCopied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
+              {codeCopy.copied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
             </Button>
           </div>
 
@@ -380,17 +434,11 @@ export function TOTPGenerator() {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={async () => {
-                    const ok = await copyToClipboard(uri)
-                    if (ok) {
-                      setUriCopied(true)
-                      setTimeout(() => setUriCopied(false), 1500)
-                    }
-                  }}
-                  aria-label="Copy URI"
+                  onClick={() => uriCopy.copy(uri)}
+                  aria-label={uriCopy.copied ? 'URI copied' : 'Copy URI'}
                   type="button"
                 >
-                  {uriCopied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
+                  {uriCopy.copied ? <Check className="size-4" /> : <Clipboard className="size-4" />}
                 </Button>
               </div>
             </div>
