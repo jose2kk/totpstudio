@@ -1,243 +1,325 @@
 /**
- * Tests for src/lib/totp.ts utility functions
- * Run with: npx tsx src/lib/__tests__/totp.test.ts
+ * Tests for src/lib/totp.ts
+ * Run with: npm test
  */
 
+import { test } from "node:test"
 import assert from "node:assert/strict"
-import { validateBase32, formatCode, getCountdownState, copyToClipboard, buildOtpauthUri } from "../totp"
+import { generate } from "otplib"
+import {
+  GUARDRAILS,
+  RECOMMENDED_SECRET_BITS,
+  buildOtpauthUri,
+  copyToClipboard,
+  formatCode,
+  getCountdownState,
+  normalizeSecret,
+  validateSecret,
+} from "../totp"
 
-let passed = 0
-let failed = 0
+/** 160-bit secret — comfortably above the RFC 6238 minimum. */
+const STRONG = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+/** 80-bit secret — the length many real services still issue. */
+const SHORT = "JBSWY3DPEHPK3PXP"
 
-function test(name: string, fn: () => void) {
-  try {
-    fn()
-    console.log(`  PASS: ${name}`)
-    passed++
-  } catch (err) {
-    console.log(`  FAIL: ${name}`)
-    if (err instanceof Error) {
-      console.log(`       ${err.message}`)
-    }
-    failed++
-  }
-}
+// --- normalizeSecret ---
 
-// --- validateBase32 ---
-console.log("\nvalidateBase32:")
-
-test("empty string returns null (no error)", () => {
-  assert.strictEqual(validateBase32(""), null)
+test("normalizeSecret trims whitespace", () => {
+  assert.equal(normalizeSecret("  JBSWY3DPEHPK3PXP  "), "JBSWY3DPEHPK3PXP")
 })
 
-test("valid base32 JBSWY3DPEHPK3PXP returns null", () => {
-  assert.strictEqual(validateBase32("JBSWY3DPEHPK3PXP"), null)
+test("normalizeSecret strips trailing base32 padding", () => {
+  assert.equal(normalizeSecret("JBSWY3DPEHPK3PXP===="), "JBSWY3DPEHPK3PXP")
 })
 
-test("lowercase valid base32 returns null (otplib auto-uppercases)", () => {
-  assert.strictEqual(validateBase32("jbswy3dpehpk3pxp"), null)
+// --- validateSecret ---
+
+test("empty string is neither an error nor a warning", () => {
+  assert.deepEqual(validateSecret(""), { error: null, warning: null, bits: null })
 })
 
-test("padded valid base32 returns null (otplib auto-pads)", () => {
-  assert.strictEqual(validateBase32("JBSWY3DPEHPK3PXP===="), null)
+test("160-bit secret is clean", () => {
+  const result = validateSecret(STRONG)
+  assert.equal(result.error, null)
+  assert.equal(result.warning, null)
+  assert.equal(result.bits, 160)
 })
 
-test("INVALID!@#$ returns error string", () => {
-  assert.strictEqual(validateBase32("INVALID!@#$"), "Invalid base32 secret")
+test("lowercase secret is accepted", () => {
+  assert.equal(validateSecret(STRONG.toLowerCase()).error, null)
 })
 
-test("12345890 returns error string (0/9 not in A-Z2-7)", () => {
-  assert.strictEqual(validateBase32("12345890"), "Invalid base32 secret")
+test("padded secret is accepted", () => {
+  const result = validateSecret(`${STRONG}====`)
+  assert.equal(result.error, null)
+  assert.equal(result.bits, 160)
 })
 
-test("whitespace-only returns error string", () => {
-  assert.strictEqual(validateBase32("   "), "Invalid base32 secret")
+test("non-base32 characters are rejected", () => {
+  assert.match(validateSecret("INVALID!@#$").error ?? "", /only A–Z and 2–7/)
+})
+
+test("digits outside the base32 alphabet are rejected", () => {
+  assert.notEqual(validateSecret("12345890").error, null)
+})
+
+test("whitespace-only input is rejected", () => {
+  assert.notEqual(validateSecret("   ").error, null)
+})
+
+test("undecodable length is rejected with a distinct message", () => {
+  // "A" is a single 5-bit group — not a whole base32 quantum.
+  assert.match(validateSecret("A").error ?? "", /missing or extra characters/)
+})
+
+test("80-bit secret warns but does not error", () => {
+  const result = validateSecret(SHORT)
+  assert.equal(result.error, null, "an 80-bit secret must remain usable")
+  assert.equal(result.bits, 80)
+  assert.match(result.warning ?? "", /80-bit/)
+  assert.match(result.warning ?? "", new RegExp(String(RECOMMENDED_SECRET_BITS)))
 })
 
 // --- formatCode ---
-console.log("\nformatCode:")
 
-test('formatCode("482039", 6) returns "482 039"', () => {
-  assert.strictEqual(formatCode("482039", 6), "482 039")
+test("formatCode splits a 6-digit code into halves", () => {
+  assert.equal(formatCode("482039", 6), "482 039")
 })
 
-test('formatCode("48203951", 8) returns "4820 3951"', () => {
-  assert.strictEqual(formatCode("48203951", 8), "4820 3951")
+test("formatCode splits an 8-digit code into halves", () => {
+  assert.equal(formatCode("48203951", 8), "4820 3951")
 })
 
-test('formatCode("", 6) returns "--- ---"', () => {
-  assert.strictEqual(formatCode("", 6), "--- ---")
+test("formatCode falls back to dashes when empty", () => {
+  assert.equal(formatCode("", 6), "--- ---")
+  assert.equal(formatCode("", 8), "---- ----")
 })
 
-test('formatCode("", 8) returns "---- ----"', () => {
-  assert.strictEqual(formatCode("", 8), "---- ----")
-})
-
-test('formatCode("12345", 6) returns "--- ---" (wrong length = fallback)', () => {
-  assert.strictEqual(formatCode("12345", 6), "--- ---")
+test("formatCode falls back to dashes on a length mismatch", () => {
+  assert.equal(formatCode("12345", 6), "--- ---")
 })
 
 // --- getCountdownState ---
-console.log("\ngetCountdownState:")
 
-test("returns object with expected keys", () => {
-  const state = getCountdownState(30)
-  assert.ok("secondsRemaining" in state, "missing secondsRemaining")
-  assert.ok("progress" in state, "missing progress")
-  assert.ok("timeStep" in state, "missing timeStep")
-  assert.ok("barColor" in state, "missing barColor")
+test("getCountdownState is green in the first third of the period", () => {
+  const state = getCountdownState(30, 1)
+  assert.equal(state.secondsRemaining, 29)
+  assert.equal(state.barColor, "bg-green-500")
 })
 
-test("progress is between 0 and 100", () => {
-  const state = getCountdownState(30)
-  assert.ok(state.progress >= 0 && state.progress <= 100, `progress ${state.progress} out of range`)
+test("getCountdownState is yellow in the middle third", () => {
+  const state = getCountdownState(30, 16)
+  assert.equal(state.secondsRemaining, 14)
+  assert.equal(state.barColor, "bg-yellow-500")
 })
 
-test("barColor is bg-green-500 when progress > 66", () => {
-  // Mock Date.now for predictable results: set to 1 second into 30-second period
-  // so secondsRemaining = 29, progress = (29/30)*100 ≈ 96.7% → green
-  const origNow = Date.now
-  Date.now = () => 1000 // epoch + 1s: elapsed=1, remaining=29
-  const state = getCountdownState(30)
-  Date.now = origNow
-  assert.strictEqual(state.barColor, "bg-green-500", `expected bg-green-500 but got ${state.barColor} (progress=${state.progress})`)
+test("getCountdownState is red in the final third", () => {
+  const state = getCountdownState(30, 22)
+  assert.equal(state.secondsRemaining, 8)
+  assert.equal(state.barColor, "bg-red-500")
 })
 
-test("barColor is bg-yellow-500 when progress > 33 and <= 66", () => {
-  // 16 seconds into 30-second period → remaining=14, progress=(14/30)*100≈46.7% → yellow
-  const origNow = Date.now
-  Date.now = () => 16000
-  const state = getCountdownState(30)
-  Date.now = origNow
-  assert.strictEqual(state.barColor, "bg-yellow-500", `expected bg-yellow-500 but got ${state.barColor} (progress=${state.progress})`)
+test("getCountdownState reports a full bar at a period boundary", () => {
+  const state = getCountdownState(30, 30)
+  assert.equal(state.secondsRemaining, 30)
+  assert.equal(state.progress, 100)
+  assert.equal(state.timeStep, 1)
 })
 
-test("barColor is bg-red-500 when progress <= 33", () => {
-  // 22 seconds into 30-second period → remaining=8, progress=(8/30)*100≈26.7% → red
-  const origNow = Date.now
-  Date.now = () => 22000
-  const state = getCountdownState(30)
-  Date.now = origNow
-  assert.strictEqual(state.barColor, "bg-red-500", `expected bg-red-500 but got ${state.barColor} (progress=${state.progress})`)
-})
-
-test("secondsRemaining is between 1 and period (inclusive)", () => {
-  const period = 30
-  const state = getCountdownState(period)
-  assert.ok(
-    state.secondsRemaining >= 1 && state.secondsRemaining <= period,
-    `secondsRemaining=${state.secondsRemaining} not in [1, ${period}]`
-  )
-})
-
-test("timeStep equals Math.floor(Date.now() / 1000 / period)", () => {
-  const period = 30
-  const state = getCountdownState(period)
-  const expected = Math.floor(Date.now() / 1000 / period)
-  // Allow ±1 for boundary timing
-  assert.ok(
-    Math.abs(state.timeStep - expected) <= 1,
-    `timeStep=${state.timeStep} vs expected=${expected}`
-  )
+test("getCountdownState advances timeStep once per period", () => {
+  assert.equal(getCountdownState(30, 59).timeStep, 1)
+  assert.equal(getCountdownState(30, 60).timeStep, 2)
+  assert.equal(getCountdownState(60, 60).timeStep, 1)
 })
 
 // --- copyToClipboard ---
-console.log("\ncopyToClipboard:")
 
-test("calls navigator.clipboard.writeText with provided text and returns true", async () => {
-  const calls: string[] = []
-  const origNavigator = globalThis.navigator
+function withClipboard(writeText: (text: string) => Promise<void>, fn: () => Promise<void>) {
+  const original = globalThis.navigator
   Object.defineProperty(globalThis, "navigator", {
-    value: {
-      clipboard: {
-        writeText: async (text: string) => {
-          calls.push(text)
-        },
-      },
-    },
+    value: { clipboard: { writeText } },
     writable: true,
     configurable: true,
   })
-  const result = await copyToClipboard("test-secret")
-  Object.defineProperty(globalThis, "navigator", { value: origNavigator, writable: true, configurable: true })
-  assert.strictEqual(result, true)
-  assert.deepStrictEqual(calls, ["test-secret"])
+  return fn().finally(() => {
+    Object.defineProperty(globalThis, "navigator", {
+      value: original,
+      writable: true,
+      configurable: true,
+    })
+  })
+}
+
+test("copyToClipboard forwards the text and reports success", async () => {
+  const calls: string[] = []
+  await withClipboard(
+    async (text) => {
+      calls.push(text)
+    },
+    async () => {
+      assert.equal(await copyToClipboard("test-secret"), true)
+    }
+  )
+  assert.deepEqual(calls, ["test-secret"])
 })
 
-test("returns false on clipboard failure", async () => {
-  const origNavigator = globalThis.navigator
-  Object.defineProperty(globalThis, "navigator", {
-    value: {
-      clipboard: {
-        writeText: async () => { throw new Error("Clipboard denied") },
-      },
+test("copyToClipboard reports failure instead of throwing", async () => {
+  await withClipboard(
+    async () => {
+      throw new Error("Clipboard denied")
     },
-    writable: true,
-    configurable: true,
-  })
-  const result = await copyToClipboard("test-secret")
-  Object.defineProperty(globalThis, "navigator", { value: origNavigator, writable: true, configurable: true })
-  assert.strictEqual(result, false)
+    async () => {
+      assert.equal(await copyToClipboard("test-secret"), false)
+    }
+  )
 })
 
 // --- buildOtpauthUri ---
-console.log("\nbuildOtpauthUri:")
 
-test("valid secret + issuer + account returns URI starting with otpauth://totp/", () => {
-  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Acme', account: 'alice@example.com', algorithm: 'sha1', digits: 6, period: 30 })
-  assert.ok(uri !== null, "expected non-null URI")
-  assert.ok(uri!.startsWith("otpauth://totp/"), `URI should start with otpauth://totp/ but got: ${uri}`)
+test("buildOtpauthUri produces an otpauth://totp/ URI", () => {
+  const uri = buildOtpauthUri({
+    secret: STRONG, issuer: "Acme", account: "alice@example.com",
+    algorithm: "sha1", digits: 6, period: 30,
+  })
+  assert.ok(uri?.startsWith("otpauth://totp/"), `got: ${uri}`)
 })
 
-test("padded secret produces URI without = or %3D in secret param", () => {
-  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP====', issuer: 'Test', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
-  assert.ok(uri !== null, "expected non-null URI")
-  const secretParam = new URL(uri!).searchParams.get('secret') ?? ''
-  assert.ok(!secretParam.includes('='), `secret param should not contain = but got: ${secretParam}`)
-  assert.ok(!uri!.includes('%3D'), `URI should not contain %3D but got: ${uri}`)
+test("buildOtpauthUri strips padding so the secret param stays scannable", () => {
+  const uri = buildOtpauthUri({
+    secret: `${STRONG}====`, issuer: "Test", account: "user",
+    algorithm: "sha1", digits: 6, period: 30,
+  })
+  assert.ok(uri !== null)
+  assert.equal(new URL(uri).searchParams.get("secret"), STRONG)
+  assert.ok(!uri.includes("%3D"), `URI should not contain %3D: ${uri}`)
 })
 
-test("empty string secret returns null", () => {
-  const uri = buildOtpauthUri({ secret: '', issuer: 'Test', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
-  assert.strictEqual(uri, null)
+test("buildOtpauthUri returns null for an empty secret", () => {
+  assert.equal(
+    buildOtpauthUri({
+      secret: "", issuer: "Test", account: "user",
+      algorithm: "sha1", digits: 6, period: 30,
+    }),
+    null
+  )
 })
 
-test("sha256 algorithm produces URI containing &algorithm=SHA256", () => {
-  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Test', account: 'user', algorithm: 'sha256', digits: 6, period: 30 })
-  assert.ok(uri !== null, "expected non-null URI")
-  assert.ok(uri!.includes('algorithm=SHA256'), `URI should contain algorithm=SHA256 but got: ${uri}`)
+test("buildOtpauthUri returns null for an invalid secret", () => {
+  // Regression: an invalid secret used to still render a scannable QR that
+  // silently created a broken authenticator entry.
+  for (const secret of ["INVALID!@#$", "A", "   "]) {
+    assert.equal(
+      buildOtpauthUri({
+        secret, issuer: "Test", account: "user",
+        algorithm: "sha1", digits: 6, period: 30,
+      }),
+      null,
+      `expected null for ${JSON.stringify(secret)}`
+    )
+  }
 })
 
-test("sha1 algorithm produces URI where 'algorithm' does NOT appear (default omitted)", () => {
-  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Test', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
-  assert.ok(uri !== null, "expected non-null URI")
-  assert.ok(!uri!.includes('algorithm'), `URI should NOT contain 'algorithm' for sha1 but got: ${uri}`)
+test("buildOtpauthUri still builds a URI for a short-but-valid secret", () => {
+  const uri = buildOtpauthUri({
+    secret: SHORT, issuer: "Test", account: "user",
+    algorithm: "sha1", digits: 6, period: 30,
+  })
+  assert.equal(new URL(uri ?? "").searchParams.get("secret"), SHORT)
 })
 
-test("empty issuer produces URI without &issuer= param", () => {
-  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: '', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
-  assert.ok(uri !== null, "expected non-null URI")
-  assert.ok(!uri!.includes('issuer='), `URI should NOT contain issuer= when issuer is empty but got: ${uri}`)
+test("buildOtpauthUri encodes a non-default algorithm", () => {
+  const uri = buildOtpauthUri({
+    secret: STRONG, issuer: "Test", account: "user",
+    algorithm: "sha256", digits: 6, period: 30,
+  })
+  assert.match(uri ?? "", /algorithm=SHA256/)
 })
 
-test("8 digits and 60s period produces URI containing &digits=8 and &period=60", () => {
-  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Test', account: 'user', algorithm: 'sha1', digits: 8, period: 60 })
-  assert.ok(uri !== null, "expected non-null URI")
-  assert.ok(uri!.includes('digits=8'), `URI should contain digits=8 but got: ${uri}`)
-  assert.ok(uri!.includes('period=60'), `URI should contain period=60 but got: ${uri}`)
+test("buildOtpauthUri omits the algorithm param for the sha1 default", () => {
+  const uri = buildOtpauthUri({
+    secret: STRONG, issuer: "Test", account: "user",
+    algorithm: "sha1", digits: 6, period: 30,
+  })
+  assert.doesNotMatch(uri ?? "", /algorithm/)
 })
 
-test("issuer 'Acme Corp' produces URI containing URL-encoded issuer param", () => {
-  const uri = buildOtpauthUri({ secret: 'JBSWY3DPEHPK3PXP', issuer: 'Acme Corp', account: 'user', algorithm: 'sha1', digits: 6, period: 30 })
-  assert.ok(uri !== null, "expected non-null URI")
-  assert.ok(uri!.includes('issuer=Acme'), `URI should contain issuer=Acme but got: ${uri}`)
+test("buildOtpauthUri omits the issuer param when issuer is empty", () => {
+  const uri = buildOtpauthUri({
+    secret: STRONG, issuer: "", account: "user",
+    algorithm: "sha1", digits: 6, period: 30,
+  })
+  assert.doesNotMatch(uri ?? "", /issuer=/)
 })
 
-// --- Summary ---
-const asyncTestsDone = () => {
-  console.log(`\n${passed} passed, ${failed} failed`)
-  if (failed > 0) process.exit(1)
-}
+test("buildOtpauthUri encodes non-default digits and period", () => {
+  const uri = buildOtpauthUri({
+    secret: STRONG, issuer: "Test", account: "user",
+    algorithm: "sha1", digits: 8, period: 60,
+  })
+  assert.match(uri ?? "", /digits=8/)
+  assert.match(uri ?? "", /period=60/)
+})
 
-// Wait for async tests then summarize
-setTimeout(asyncTestsDone, 100)
+test("buildOtpauthUri URL-encodes an issuer containing a space", () => {
+  const uri = buildOtpauthUri({
+    secret: STRONG, issuer: "Acme Corp", account: "user",
+    algorithm: "sha1", digits: 6, period: 30,
+  })
+  assert.equal(new URL(uri ?? "").searchParams.get("issuer"), "Acme Corp")
+})
+
+// --- code generation (integration with otplib) ---
+
+test("generates the RFC 6238 Appendix B test vectors", async () => {
+  // Seed is ASCII "12345678901234567890" in base32. These are the canonical
+  // SHA-1 vectors; if any drift, the tool is producing wrong codes.
+  const vectors: [number, string][] = [
+    [59, "94287082"],
+    [1111111109, "07081804"],
+    [1111111111, "14050471"],
+    [1234567890, "89005924"],
+    [2000000000, "69279037"],
+    [20000000000, "65353130"],
+  ]
+  for (const [epoch, expected] of vectors) {
+    const actual = await generate({
+      secret: STRONG, algorithm: "sha1", digits: 8, period: 30,
+      epoch, guardrails: GUARDRAILS,
+    })
+    assert.equal(actual, expected, `T=${epoch}`)
+  }
+})
+
+test("generates a code for an 80-bit secret", async () => {
+  // Regression: otplib enforces a 128-bit floor by default, which made the app
+  // reject 16-character secrets as "invalid base32" — the most common real
+  // secret length users paste in.
+  const code = await generate({
+    secret: SHORT, algorithm: "sha1", digits: 6, period: 30,
+    epoch: 59, guardrails: GUARDRAILS,
+  })
+  assert.match(code, /^\d{6}$/)
+})
+
+test("generates a code for a padded secret once normalized", async () => {
+  // Regression: otplib does not auto-pad or auto-strip; padded input threw
+  // "string has too much padding" and surfaced as "invalid base32 secret".
+  const code = await generate({
+    secret: normalizeSecret(`${STRONG}====`), algorithm: "sha1", digits: 6, period: 30,
+    epoch: 59, guardrails: GUARDRAILS,
+  })
+  assert.match(code, /^\d{6}$/)
+})
+
+test("every secret validateSecret accepts can actually produce a code", async () => {
+  // The invariant the two previous regressions both violated.
+  for (const secret of [STRONG, SHORT, `${STRONG}====`, STRONG.toLowerCase(), "ABCDE"]) {
+    const result = validateSecret(secret)
+    assert.equal(result.error, null, `validateSecret rejected ${secret}`)
+    const code = await generate({
+      secret: normalizeSecret(secret), algorithm: "sha1", digits: 6, period: 30,
+      epoch: 59, guardrails: GUARDRAILS,
+    })
+    assert.match(code, /^\d{6}$/, `no code for ${secret}`)
+  }
+})

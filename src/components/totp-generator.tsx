@@ -9,7 +9,16 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { validateBase32, formatCode, getCountdownState, copyToClipboard, buildOtpauthUri } from '@/lib/totp'
+import {
+  GUARDRAILS,
+  buildOtpauthUri,
+  copyToClipboard,
+  formatCode,
+  getCountdownState,
+  normalizeSecret,
+  nowSeconds,
+  validateSecret,
+} from '@/lib/totp'
 
 export function TOTPGenerator() {
   // Form state
@@ -20,7 +29,6 @@ export function TOTPGenerator() {
 
   // UI state
   const [showSecret, setShowSecret] = useState(false)
-  const [secretError, setSecretError] = useState<string | null>(null)
   const [secretCopied, setSecretCopied] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
 
@@ -31,66 +39,87 @@ export function TOTPGenerator() {
   // URI copy feedback
   const [uriCopied, setUriCopied] = useState(false)
 
-  // Seed a random default secret on mount so first-time visitors immediately see a live code + QR.
-  // Done in an effect (not lazy useState init) to avoid SSR/client hydration mismatch.
+  // Wall clock, in whole seconds. Every countdown value is derived from this
+  // single ticking source rather than being tracked as separate state.
+  const [nowSec, setNowSec] = useState(0)
+
+  const [code, setCode] = useState('')
+
+  // Failures reported by the TOTP engine, tagged with the inputs that caused
+  // them. Tagging lets the error expire by derivation when the inputs change,
+  // instead of needing an effect to clear it.
+  const [engineError, setEngineError] = useState<{ key: string; message: string } | null>(null)
+
+  const normalized = normalizeSecret(secret)
+  const validation = useMemo(() => validateSecret(secret), [secret])
+  const paramKey = `${normalized}|${algorithm}|${digits}|${period}`
+
+  const secretError =
+    validation.error ?? (engineError?.key === paramKey ? engineError.message : null)
+  const secretWarning = secretError ? null : validation.warning
+
+  const isLive = normalized.length > 0 && !secretError
+
+  const countdown = useMemo(() => getCountdownState(period, nowSec), [period, nowSec])
+  const { secondsRemaining, progress, timeStep, barColor } = countdown
+
+  // Derived rather than cleared in an effect, so an invalid secret can never
+  // leave a stale code on screen or copyable.
+  const displayCode = isLive ? code : ''
+
+  // Compute otpauth:// URI reactively (QR-03, per D-06). buildOtpauthUri
+  // returns null for an invalid secret, so no unscannable QR is ever shown.
+  const uri = useMemo(
+    () => buildOtpauthUri({ secret, issuer, account, algorithm, digits, period }),
+    [secret, issuer, account, algorithm, digits, period]
+  )
+
+  // Client-only seeding. Neither the CSPRNG nor the wall clock is available
+  // during the static prerender, so both are read after mount to keep the
+  // server-rendered HTML and the first client render identical.
+  /* eslint-disable react-hooks/set-state-in-effect -- see comment above */
   useEffect(() => {
     setSecret((current) => current || generateSecret())
+    setNowSec(nowSeconds())
+  }, [])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Wall-clock ticker (per D-09, RESEARCH Pattern 2). Re-reads the clock rather
+  // than decrementing a counter, so it self-corrects after the tab is throttled
+  // or the machine sleeps; visibilitychange resyncs immediately on return.
+  useEffect(() => {
+    const sync = () => setNowSec(nowSeconds())
+    const interval = setInterval(sync, 1000)
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', sync)
+    }
   }, [])
 
-  // TOTP output state
-  const [code, setCode] = useState('')
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(30)
-  const [progress, setProgress] = useState<number>(100)
-  const [timeStep, setTimeStep] = useState<number>(0)
-  const [barColor, setBarColor] = useState('bg-green-500')
-
-  // Compute otpauth:// URI reactively (QR-03, per D-06: renders when valid secret exists)
-  const uri = useMemo(() => {
-    return buildOtpauthUri({ secret, issuer, account, algorithm, digits, period })
-  }, [secret, issuer, account, algorithm, digits, period])
-
-  // Wall-clock TOTP generation timer (per D-09, RESEARCH Pattern 2)
-  // Uses Date.now() for self-correcting countdown, not setInterval decrement
+  // Generate the code once per time step, not once per tick — the code only
+  // changes when timeStep does, and each generation is an HMAC.
   useEffect(() => {
-    if (!secret || secretError) {
-      setCode('')
-      return
-    }
+    if (!isLive) return
 
     let cancelled = false
 
-    const compute = async () => {
-      const countdown = getCountdownState(period)
-
-      try {
-        const newCode = await generate({ secret: secret.trim(), algorithm, digits, period })
-        if (!cancelled) {
-          setCode(newCode)
-          setSecondsRemaining(countdown.secondsRemaining)
-          setProgress(countdown.progress)
-          setTimeStep(countdown.timeStep)
-          setBarColor(countdown.barColor)
-        }
-      } catch {
-        // otplib throws for invalid secrets at generation time (T-02-04)
-        if (!cancelled) {
-          setSecretError('Invalid base32 secret')
-          setCode('')
-        }
-      }
-    }
-
-    // Run immediately on mount / parameter change
-    compute()
-
-    // Tick every second — wall-clock recalculation (RESEARCH Pitfall 2)
-    const interval = setInterval(compute, 1000)
+    generate({ secret: normalized, algorithm, digits, period, guardrails: GUARDRAILS })
+      .then((next) => {
+        if (!cancelled) setCode(next)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        setEngineError({
+          key: paramKey,
+          message: err instanceof Error ? err.message : 'Could not generate a code',
+        })
+      })
 
     return () => {
       cancelled = true
-      clearInterval(interval)
     }
-  }, [secret, secretError, algorithm, digits, period])
+  }, [isLive, normalized, algorithm, digits, period, paramKey, timeStep])
 
   return (
     <div className="space-y-4">
@@ -100,11 +129,7 @@ export function TOTPGenerator() {
           <Input
             type={showSecret ? 'text' : 'password'}
             value={secret}
-            onChange={(e) => {
-              const val = e.target.value
-              setSecret(val)
-              setSecretError(validateBase32(val))
-            }}
+            onChange={(e) => setSecret(e.target.value)}
             placeholder="Enter base32 secret"
             className={cn(
               'font-mono pr-24',
@@ -146,11 +171,7 @@ export function TOTPGenerator() {
             <Button
               variant="ghost"
               size="icon-sm"
-              onClick={() => {
-                const newSecret = generateSecret()
-                setSecret(newSecret)
-                setSecretError(null)
-              }}
+              onClick={() => setSecret(generateSecret())}
               aria-label="Generate random secret"
               type="button"
             >
@@ -162,6 +183,11 @@ export function TOTPGenerator() {
         {/* Inline error text (D-03, RESEARCH Pitfall 5) */}
         {secretError && (
           <p className="text-destructive text-sm">{secretError}</p>
+        )}
+
+        {/* Non-blocking advisory — the code is still generated below */}
+        {secretWarning && (
+          <p className="text-amber-500 text-sm">{secretWarning}</p>
         )}
       </div>
 
@@ -232,17 +258,17 @@ export function TOTPGenerator() {
           <div className="flex items-center justify-center gap-3">
             {/* key={timeStep} triggers remount for fade-in animation on code rotation */}
             <div
-              key={!secret || secretError ? 'empty' : timeStep}
+              key={isLive ? timeStep : 'empty'}
               className="animate-in fade-in duration-200"
               aria-live="polite"
             >
               <span
                 className={cn(
                   'font-mono text-[30px] font-semibold tracking-wider',
-                  (!secret || secretError) && 'text-muted-foreground'
+                  !isLive && 'text-muted-foreground'
                 )}
               >
-                {!secret || secretError ? formatCode('', digits) : formatCode(code, digits)}
+                {formatCode(displayCode, digits)}
               </span>
             </div>
 
@@ -251,14 +277,14 @@ export function TOTPGenerator() {
               variant="ghost"
               size="icon-sm"
               onClick={async () => {
-                if (!code) return
-                const ok = await copyToClipboard(code)
+                if (!displayCode) return
+                const ok = await copyToClipboard(displayCode)
                 if (ok) {
                   setCodeCopied(true)
                   setTimeout(() => setCodeCopied(false), 1500)
                 }
               }}
-              disabled={!code}
+              disabled={!displayCode}
               aria-label="Copy TOTP code"
               type="button"
             >
@@ -272,21 +298,21 @@ export function TOTPGenerator() {
               <div
                 className={cn(
                   'h-full rounded-full',
-                  secret && !secretError ? barColor : 'bg-muted-foreground/50',
+                  isLive ? barColor : 'bg-muted-foreground/50',
                   // Remove transition at period boundary to prevent slow 0→100 animation (RESEARCH Pitfall 4)
                   secondsRemaining === period
                     ? 'transition-none'
                     : 'transition-[width] duration-[950ms] ease-linear'
                 )}
-                style={{ width: secret && !secretError ? `${progress}%` : '0%' }}
+                style={{ width: isLive ? `${progress}%` : '0%' }}
                 role="progressbar"
-                aria-valuenow={secret && !secretError ? secondsRemaining : 0}
+                aria-valuenow={isLive ? secondsRemaining : 0}
                 aria-valuemin={0}
                 aria-valuemax={period}
               />
             </div>
             <span className="text-sm text-muted-foreground w-8 text-right tabular-nums">
-              {secret && !secretError ? `${secondsRemaining}s` : ''}
+              {isLive ? `${secondsRemaining}s` : ''}
             </span>
           </div>
         </div>
@@ -316,20 +342,25 @@ export function TOTPGenerator() {
             />
           </div>
 
-          {/* QR code display (QR-03, QR-04, per D-06: renders when valid secret exists) */}
+          {/* QR code display (QR-03, QR-04, per D-06).
+              Always dark-on-light with a padded quiet zone regardless of theme:
+              react-qr-code draws modules edge-to-edge (no margin of its own),
+              and an inverted QR is a scanning risk on some readers. */}
           <div className="flex justify-center">
             {uri ? (
-              <QRCode
-                value={uri}
-                size={192}
-                level="M"
-                bgColor="transparent"
-                fgColor="currentColor"
-                aria-label="QR code for authenticator app"
-                role="img"
-              />
+              <div className="rounded-md bg-white p-5">
+                <QRCode
+                  value={uri}
+                  size={192}
+                  level="M"
+                  bgColor="#ffffff"
+                  fgColor="#000000"
+                  aria-label="QR code for authenticator app"
+                  role="img"
+                />
+              </div>
             ) : (
-              <div className="size-48 bg-muted rounded-md flex items-center justify-center">
+              <div className="size-[232px] bg-muted rounded-md flex items-center justify-center">
                 <QrCode className="size-8 text-muted-foreground" />
               </div>
             )}
